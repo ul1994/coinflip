@@ -44,7 +44,7 @@ class CoinFlipEnv(gym.Env):
             self.theta_threshold_radians * 2,
             np.finfo(np.float32).max])
 
-		# TODO: Define action space {hold, buy, sell}?
+		# TODO: Define action space 3? {hold, buy, sell}?
         self.action_space = spaces.Discrete(2)
 		# TODO: Define obs space - bounds for the results of taking actions
 		# example for cartpole: (min angle, max angle) ... 1-dimensional
@@ -66,6 +66,7 @@ class CoinFlipEnv(gym.Env):
         state = self.state
         # TODO: Correctly unpack new worldstate
 		x, x_dot, theta, theta_dot = state
+		# TODO: Correclty adjust world
         force = self.force_mag if action==1 else -self.force_mag
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
@@ -101,11 +102,15 @@ class CoinFlipEnv(gym.Env):
         return np.array(self.state), reward, done, {}
 
     def _reset(self):
+		# TODO: Correctly reinitialize a random start state
         self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
         self.steps_beyond_done = None
         return np.array(self.state)
 
     def _render(self, mode='human', close=False):
+		# TODO: Does this need to be implemented? Maybe just do a printout.
+		# raise Exception('Rendering is Not Implemented!')
+
         if close:
             if self.viewer is not None:
                 self.viewer.close()
