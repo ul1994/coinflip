@@ -19,6 +19,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+EPOCH_0 = 0
+WORTH_0 = 1000
+
 class CoinFlipEnv(gym.Env):
 	metadata = {
 		'render.modes': ['human', 'rgb_array'],
@@ -40,26 +43,28 @@ class CoinFlipEnv(gym.Env):
 		self.series = series
 
 	def __init__(self):
-		# TODO: Define general world parameters
+		# Define general world parameters
+		# TODO: define exchange fee
 		self.load_data()
-		self.epoch = 0
+		self.epoch = EPOCH_0
 
-		self.state = 0
-		self.worth = 1000 # enough to purchase at least 1 eth
+		self.position = int(np.random.random_sample() > 0.5) # initialize with hold state (nothing)
+		self.worth = WORTH_0 # enough to purchase at least 1 eth
+		self.whist = [WORTH_0]
 
 		# Set some baseline endgame parameters
 		# Angle at which to fail the episode
-		self.toplim = 1000 * 50
+		self.toplim = self.worth * 50
 		self.neg_worth = self.worth / 2.0
 
-		# Define action space 3? {hold, buy, sell}?
+		# Define action space 3? {0 sell, 1 hold, 2 buy}?
 		self.action_space = spaces.Discrete(3)
 
-		# Define obs space - bounds for the results of taking actions
-		# example for cartpole: (min angle, max angle) ... 1-dimensional
-		# observation is the accumulated value
-		high = np.array([self.toplim])
-		low = np.array([self.neg_worth])
+		# Define obs space - range of possible worldstates
+		# 1. all possible positions: 0 eth ... 1 eth
+		# 2. all possible total worths: 500 ... 50 * 1000
+		high = np.array([1, self.toplim])
+		low = np.array([0, self.neg_worth])
 		self.observation_space = spaces.Box(low, high)
 
 		self._seed()
@@ -73,52 +78,60 @@ class CoinFlipEnv(gym.Env):
 		return [seed]
 
 	def _step(self, action):
-		# Simulate the reaction to some action
 		assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+		self.epoch += 1 # incrememt world time
 		state = self.state
-		# TODO: Correctly unpack new worldstate
-		self.epoch += 1
-		x, x_dot, theta, theta_dot = state
-		# TODO: Correclty adjust world
-		force = self.force_mag if action==1 else -self.force_mag
-		costheta = math.cos(theta)
-		sintheta = math.sin(theta)
-		temp = (force + self.polemass_length * theta_dot * theta_dot * sintheta) / self.total_mass
-		thetaacc = (self.gravity * sintheta - costheta* temp) / (self.length * (4.0/3.0 - self.masspole * costheta * costheta / self.total_mass))
-		xacc  = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-		x  = x + self.tau * x_dot
-		x_dot = x_dot + self.tau * xacc
-		theta = theta + self.tau * theta_dot
-		theta_dot = theta_dot + self.tau * thetaacc
 
-		# TODO: Correctly change worldstate wrt. action
-		self.state = (x,x_dot,theta,theta_dot)
-		# TODO: Verify if minimal threshold is hit
-		done =  x < -self.x_threshold \
-				or x > self.x_threshold \
-				or theta < -self.theta_threshold_radians \
-				or theta > self.theta_threshold_radians \
-				or self.epoch == len(self.series.prices)
-		done = bool(done)
+		# Correctly unpack new worldstate
+		position, worth = state
 
-		if not done:
-			reward = 1.0
-		elif self.steps_beyond_done is None:
-			# Pole just fell!
-			self.steps_beyond_done = 0
+		# Correclty adjust world
+		self.buy_price = 0.0
+		eth_value = self.series.prices[self.epoch]
+		if self.position == 1 and action == 0:
+			# sell
+			worth += eth_value
+			self.position = 0
+			# TODO: define appropriate reward for selling
+			net_gain = eth_value - self.buy_price
+			reward = net_gain # TODO: normalize this?
+		elif self.position == 1 and action == 1:
+			# hold
+			# baseline worth does not change
+			# self.position # position does not change
+			# TODO: define appropriate reward for holding
+			reward = 0.0
+		elif self.position == 0 and action == 2:
+			# buy
+			worth -= eth_value
+			self.buy_price = eth_value
+			self.position += 1
 			reward = 1.0
 		else:
-			if self.steps_beyond_done == 0:
-				logger.warning("You are calling 'step()' even though this environment has already returned done = True. You should always call 'reset()' once you receive 'done = True' -- any further steps are undefined behavior.")
-			self.steps_beyond_done += 1
-			reward = 0.0
+			# FIXME: reward is same as holding. How do we prevent spamming invalid moves.
+			# Invalid move ... no reward? neg reward?
+			# TODO: define appropriate reward for invalid
+			# Soft punish invalid moves?
+			reward = -0.1
+
+		# Changed worldstate wrt. action
+		self.state = (position, worth)
+
+		# Check endgame thresholds
+		done =  self.neg_worth > worth \
+				or self.worth > self.toplim \
+				or self.epoch == len(self.series.prices)
+		done = bool(done)
 
 		return np.array(self.state), reward, done, {}
 
 	def _reset(self):
-		# TODO: Correctly reinitialize a random start state
-		self.epoch = 0
-		self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
+		# FIXME: Correctly reinitialize a random start state
+		self.epoch = EPOCH_0
+		self.whist = [WORTH_0]
+		self.position = int(np.random.random_sample() > 0.5)
+		self.state = [self.position, WORTH_0]
+		# self.position = int(np.random.random_sample() > 0.5)
 		self.steps_beyond_done = None
 		return np.array(self.state)
 
@@ -136,6 +149,15 @@ class CoinFlipEnv(gym.Env):
 		if self.viewer is None:
 			from gym.envs.classic_control import rendering
 			self.viewer = rendering.Viewer(screen_width, screen_height)
+
+			# add worth status indicator
+			self.status = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
+			self.status.set_color(.8,.3,.8)
+			self.statustrans = rendering.Transform()
+			self.status.add_attr(self.statustrans)
+			self.viewer.add_geom(self.status)
+
+			# add a continuous ticker graph
 			self.tickers = []
 			for ii in range(screen_width / bar_w):
 				wt, ht = bar_w, 1
@@ -168,5 +190,8 @@ class CoinFlipEnv(gym.Env):
 
 			ticker.set_color(.8, .6, .3)
 			self.tickers[tind][1][1] = pixheight
+
+		pixworth = int(self.whist[-1] / 10.0)
+		self.statustrans.set_translation(0, pixworth)
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
