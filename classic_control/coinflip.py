@@ -43,32 +43,24 @@ class CoinFlipEnv(gym.Env):
 		# TODO: Define general world parameters
 		self.load_data()
 		self.epoch = 0
-		self.gravity = 9.8
-		self.masscart = 1.0
-		self.masspole = 0.1
-		self.total_mass = (self.masspole + self.masscart)
-		self.length = 0.5 # actually half the pole's length
-		self.polemass_length = (self.masspole * self.length)
-		self.force_mag = 10.0
-		self.tau = 0.02  # seconds between state updates
 
-		# TODO: Set some baseline endgame parameters
+		self.state = 0
+		self.worth = 1000 # enough to purchase at least 1 eth
+
+		# Set some baseline endgame parameters
 		# Angle at which to fail the episode
-		self.theta_threshold_radians = 12 * 2 * math.pi / 360
-		self.x_threshold = 2.4
+		self.toplim = 1000 * 50
+		self.neg_worth = self.worth / 2.0
 
-		# Angle limit set to 2 * theta_threshold_radians so failing observation is still within bounds
-		high = np.array([
-			self.x_threshold * 2,
-			np.finfo(np.float32).max,
-			self.theta_threshold_radians * 2,
-			np.finfo(np.float32).max])
+		# Define action space 3? {hold, buy, sell}?
+		self.action_space = spaces.Discrete(3)
 
-		# TODO: Define action space 3? {hold, buy, sell}?
-		self.action_space = spaces.Discrete(2)
-		# TODO: Define obs space - bounds for the results of taking actions
+		# Define obs space - bounds for the results of taking actions
 		# example for cartpole: (min angle, max angle) ... 1-dimensional
-		self.observation_space = spaces.Box(-high, high)
+		# observation is the accumulated value
+		high = np.array([self.toplim])
+		low = np.array([self.neg_worth])
+		self.observation_space = spaces.Box(low, high)
 
 		self._seed()
 		self.viewer = None
@@ -101,11 +93,12 @@ class CoinFlipEnv(gym.Env):
 
 		# TODO: Correctly change worldstate wrt. action
 		self.state = (x,x_dot,theta,theta_dot)
-		# TODO: Verify endgame triggers
+		# TODO: Verify if minimal threshold is hit
 		done =  x < -self.x_threshold \
 				or x > self.x_threshold \
 				or theta < -self.theta_threshold_radians \
-				or theta > self.theta_threshold_radians
+				or theta > self.theta_threshold_radians \
+				or self.epoch == len(self.series.prices)
 		done = bool(done)
 
 		if not done:
@@ -124,15 +117,12 @@ class CoinFlipEnv(gym.Env):
 
 	def _reset(self):
 		# TODO: Correctly reinitialize a random start state
-		# self.epoch = 0
+		self.epoch = 0
 		self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
 		self.steps_beyond_done = None
 		return np.array(self.state)
 
 	def _render(self, mode='human', close=False):
-		# TODO: Does this need to be implemented? Maybe just do a printout.
-		# raise Exception('Rendering is Not Implemented!')
-
 		if close:
 			if self.viewer is not None:
 				self.viewer.close()
