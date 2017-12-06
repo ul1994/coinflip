@@ -6,6 +6,10 @@ permalink: https://perma.cc/C9ZM-652R
 
 # ULZ
 
+ethdata_folder = '/Users/ulzee/nyu/eth/external/eth-history'
+import sys, json
+sys.path.append(ethdata_folder)
+from eth import Series, Eras
 import logging
 import math
 import gym
@@ -21,8 +25,23 @@ class CoinFlipEnv(gym.Env):
 		'video.frames_per_second' : 50
 	}
 
+	def load_data(self):
+		histfile = '%s/data/USDT_ETH-1800.json' % ethdata_folder
+		livefile = '%s/data/public.json' % ethdata_folder
+
+		with open(histfile) as fl:
+			histdata = json.load(fl)
+
+		with open(livefile) as fl:
+			histdata += json.load(fl)
+
+		series = Series(histdata, sample=10)
+		series.era(Eras.Modern)
+		self.series = series
+
 	def __init__(self):
 		# TODO: Define general world parameters
+		self.load_data()
 		self.epoch = 0
 		self.gravity = 9.8
 		self.masscart = 1.0
@@ -105,6 +124,7 @@ class CoinFlipEnv(gym.Env):
 
 	def _reset(self):
 		# TODO: Correctly reinitialize a random start state
+		# self.epoch = 0
 		self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
 		self.steps_beyond_done = None
 		return np.array(self.state)
@@ -122,49 +142,41 @@ class CoinFlipEnv(gym.Env):
 		screen_width = 600
 		screen_height = 400
 
-		# world_width = self.x_threshold*2
-		# scale = screen_width/world_width
-		# carty = 100 # TOP OF CART
-		# polewidth = 10.0
-		# polelen = scale * 1.0
-		# cartwidth = 50.0
-		# cartheight = 30.0
-
+		bar_w = 2
 		if self.viewer is None:
 			from gym.envs.classic_control import rendering
 			self.viewer = rendering.Viewer(screen_width, screen_height)
 			self.tickers = []
-			# l,r,t,b = -cartwidth/2, cartwidth/2, cartheight/2, -cartheight/2
-			# axleoffset =cartheight/4.0
-			for ii in range(screen_width):
-				wt, ht = 1, 1
-				lhs = ii
+			for ii in range(screen_width / bar_w):
+				wt, ht = bar_w, 1
+				lhs = bar_w * ii
 				rhs = lhs + wt
 				ticker = rendering.FilledPolygon([(lhs,0), (lhs,ht), (rhs,ht), (rhs,0)])
 				ticker.set_color(.3,.3,.3)
+				tickertrans = rendering.Transform()
+				ticker.add_attr(tickertrans)
 				self.viewer.add_geom(ticker)
-				self.tickers.append(ticker)
-			# l,r,t,b = -polewidth/2,polewidth/2,polelen-polewidth/2,-polewidth/2
-			# pole = rendering.FilledPolygon([(l,b), (l,t), (r,t), (r,b)])
-			# self.poletrans = rendering.Transform(translation=(0, axleoffset))
-			# pole.add_attr(self.poletrans)
-			# pole.add_attr(self.carttrans)
-			# self.viewer.add_geom(pole)
-			# self.axle = rendering.make_circle(polewidth/2)
-			# self.axle.add_attr(self.poletrans)
-			# self.axle.add_attr(self.carttrans)
-			# self.axle.set_color(.5,.5,.8)
-			# self.viewer.add_geom(self.axle)
-			# self.track = rendering.Line((0,carty), (screen_width,carty))
-			# self.track.set_color(0,0,0)
-			# self.viewer.add_geom(self.track)
+				self.tickers.append((ticker, [tickertrans, 1]))
 
 		if self.state is None: return None
 
-		x = self.state
-		self.tickers[self.epoch].set_color(.8, .6, .4)
-		# cartx = x[0]*scale+screen_width/2.0 # MIDDLE OF CART
-		# self.carttrans.set_translation(cartx, carty)
-		# self.poletrans.set_rotation(-x[2])
+		for ii in range(min(self.epoch, len(self.tickers))):
+			time_i = self.epoch
+			maxprice = 600.0
+			tind = time_i
+			if self.epoch >= len(self.tickers):
+				tind = ii
+				time_i = self.epoch - len(self.tickers) + ii
+			ticker, args = self.tickers[tind]
+			trans, ht = args
+
+			# Resize to ht of 1
+			trans.set_scale(1.0, 1.0 / float(ht))
+			pscale = self.series.prices[time_i] / float(maxprice)
+			pixheight = float(pscale * float(screen_height))
+			trans.set_scale(1.0, pixheight)
+
+			ticker.set_color(.8, .6, .3)
+			self.tickers[tind][1][1] = pixheight
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
