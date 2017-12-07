@@ -151,16 +151,16 @@ class CoinFlipEnv(gym.Env):
 			self.viewer = rendering.Viewer(screen_width, screen_height)
 
 			# add worth status indicator
-			self.status = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
-			self.status.set_color(.8,.3,.8)
-			self.statustrans = rendering.Transform()
-			self.status.add_attr(self.statustrans)
-			self.viewer.add_geom(self.status)
+			# self.status = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
+			# self.status.set_color(.8,.3,.8)
+			# self.statustrans = rendering.Transform()
+			# self.status.add_attr(self.statustrans)
+			# self.viewer.add_geom(self.status)
 
 			# add a continuous ticker graph
 			self.tickers = []
 			for ii in range(screen_width / bar_w):
-				wt, ht = bar_w, 1
+				wt, ht = bar_w, 2
 				lhs = bar_w * ii
 				rhs = lhs + wt
 				ticker = rendering.FilledPolygon([(lhs,0), (lhs,ht), (rhs,ht), (rhs,0)])
@@ -168,7 +168,7 @@ class CoinFlipEnv(gym.Env):
 				tickertrans = rendering.Transform()
 				ticker.add_attr(tickertrans)
 				self.viewer.add_geom(ticker)
-				self.tickers.append((ticker, [tickertrans, 1]))
+				self.tickers.append((ticker, tickertrans))
 
 		if self.state is None: return None
 
@@ -179,19 +179,17 @@ class CoinFlipEnv(gym.Env):
 			if self.epoch >= len(self.tickers):
 				tind = ii
 				time_i = self.epoch - len(self.tickers) + ii
-			ticker, args = self.tickers[tind]
-			trans, ht = args
+			ticker, trans = self.tickers[tind]
 
-			# Resize to ht of 1
-			trans.set_scale(1.0, 1.0 / float(ht))
 			pscale = self.series.prices[time_i] / float(maxprice)
 			pixheight = float(pscale * float(screen_height))
-			trans.set_scale(1.0, pixheight)
-
+			trans.set_translation(0, pixheight)
 			ticker.set_color(.8, .6, .3)
-			self.tickers[tind][1][1] = pixheight
 
-		pixworth = int(self.whist[-1] / 10.0)
-		self.statustrans.set_translation(0, pixworth)
+		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
+			self.tickers[ii][0].set_color(.3, .3, .3)
+
+		# pixworth = int(self.whist[-1] / 10.0)
+		# self.statustrans.set_translation(0, pixworth)
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
