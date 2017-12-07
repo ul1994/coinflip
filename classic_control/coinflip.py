@@ -68,12 +68,14 @@ class CoinFlipEnv(gym.Env):
 
 		# Define action space 3? {0 hold, 1 buy/sell}?
 		self.action_space = spaces.Discrete(3)
-		self.buy_price = 0.0 # historical buy price
+		self.buy_price = self.series.prices[0] # historical buy price
+		self.exch_fee = 1.0 # exchange fee of at least $1
 
 		# Define obs space - range of possible worldstates
 		# 1. all possible positions: 0 eth ... 1 eth
 		# REMOVED 2. all possible total worths: 500 ... 50 * 1000
-		# 3. possible range of price of ETH / 1000 (scaled from 0 ... 1)
+		# 2. price of ETH / 1000 at this time (scaled from 0 ... 1)
+		# 3. last buy price
 
 		high = np.array([1, 1])
 		low = np.array([0, 0])
@@ -115,13 +117,11 @@ class CoinFlipEnv(gym.Env):
 			worth += eth_value
 			position = 0
 			# FIXME: define appropriate reward for selling
-			net_gain = eth_value - self.buy_price
-			reward = 1.0
+			net_gain = eth_value - self.buy_price - self.exch_fee
 			if net_gain > 0:
 				reward = 1.0 # full reward for gain after sells
 			else:
 				reward = -1.0 # full punishment of loss in sells
-			# reward = net_gain # FIXME: normalize this?
 			self.last_action = action
 		else:
 			# reward = -0.5 # severely punish invalid moves
@@ -224,10 +224,11 @@ class CoinFlipEnv(gym.Env):
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
 
+		self.baselinetrans.set_translation(0, 50)
+
 		position, _ = self.state
-		pixworth = int(self.worth / 10.0) # worth
+		pixworth = int((self.worth - self.start_worth) / 10.0) + 50# worth
 		self.statustrans.set_translation(0, pixworth)
 		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
-		self.baselinetrans.set_translation(0, int(self.start_worth / 10.0))
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
