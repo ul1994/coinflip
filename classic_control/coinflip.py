@@ -77,8 +77,8 @@ class CoinFlipEnv(gym.Env):
 		# 2. price of ETH / 1000 at this time (scaled from 0 ... 1)
 		# 3. last buy price
 
-		high = np.array([1, 1])
-		low = np.array([0, 0])
+		high = np.array([1, 1, 1])
+		low = np.array([0, 0, 0])
 		self.observation_space = spaces.Box(low, high)
 
 		self._seed()
@@ -96,7 +96,7 @@ class CoinFlipEnv(gym.Env):
 		state = self.state
 
 		# Correctly unpack new worldstate
-		position, _ = state
+		position, _, _ = state
 		worth = self.worth
 
 		# Correclty adjust world
@@ -130,7 +130,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Changed worldstate wrt. action
 		self.worth = worth
-		self.state = (position, eth_value / 1000.0)
+		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
 
 		# Check endgame thresholds
 		done =  self.neg_worth > self.worth \
@@ -146,7 +146,8 @@ class CoinFlipEnv(gym.Env):
 		self.epoch = EPOCH_0
 		worth = self.init_start_worth()
 		position = self.init_start_pos()
-		self.state = [position, self.series.prices[0] / 1000.0]
+		self.buy_price = self.series.prices[0] / 1000.0
+		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price]
 
 		return np.array(self.state)
 
@@ -226,7 +227,7 @@ class CoinFlipEnv(gym.Env):
 
 		self.baselinetrans.set_translation(0, 50)
 
-		position, _ = self.state
+		position, _, _ = self.state
 		pixworth = int((self.worth - self.start_worth) / 10.0) + 50# worth
 		self.statustrans.set_translation(0, pixworth)
 		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
