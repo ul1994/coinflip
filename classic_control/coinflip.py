@@ -48,7 +48,8 @@ class CoinFlipEnv(gym.Env):
 		return worth
 
 	def init_start_pos(self):
-		return int(np.random.random_sample() > 0.5)
+		# return int(np.random.random_sample() > 0.5)
+		return 0
 
 	def __init__(self):
 		# Define general world parameters
@@ -70,10 +71,10 @@ class CoinFlipEnv(gym.Env):
 
 		# Define obs space - range of possible worldstates
 		# 1. all possible positions: 0 eth ... 1 eth
-		# 2. all possible total worths: 500 ... 50 * 1000
-		# 3. possible range of price of ETH
+		# REMOVED 2. all possible total worths: 500 ... 50 * 1000
+		# 3. possible range of price of ETH / 1000 (scaled from 0 ... 1)
 
-		high = np.array([1, 1000])
+		high = np.array([1, 1])
 		low = np.array([0, 0])
 		self.observation_space = spaces.Box(low, high)
 
@@ -92,7 +93,7 @@ class CoinFlipEnv(gym.Env):
 		state = self.state
 
 		# Correctly unpack new worldstate
-		position, past_price = state
+		position, _ = state
 		worth = self.worth
 
 		# Correclty adjust world
@@ -105,30 +106,30 @@ class CoinFlipEnv(gym.Env):
 			# TODO: define appropriate reward for holding
 			reward = 1.0
 		if action == 1:
-			reward = 1.0
-			# if position == 0:
-			# # 	# buy
-			# # 	# FIXME: what is a consistent reward for a buy?
-			# 	worth -= eth_value
-			# 	self.buy_price = eth_value
-			# 	position += 1
-			# 	reward = 1.0
-			# elif position == 1:
-			# # 	# sell
-			# 	worth += eth_value
-			# 	position = 0
-			# 	# FIXME: define appropriate reward for selling
-			# 	net_gain = eth_value - self.buy_price
-			# 	reward = 1.0
-			# 	# if net_gain > 0:
-			# 	# 	reward = 1.0
-			# 	# else:
-			# 	# 	reward = 1.0
-			# 	# reward = net_gain # FIXME: normalize this?
+			# reward = 1.0
+			if position == 0:
+				# buy
+				# FIXME: what is a consistent reward for a buy?
+				worth -= eth_value
+				self.buy_price = eth_value
+				position = 1 # +=
+				reward = 0.0
+			elif position == 1:
+				# sell
+				worth += eth_value
+				position = 0
+				# FIXME: define appropriate reward for selling
+				net_gain = eth_value - self.buy_price
+				reward = 1.0
+				if net_gain > 0:
+					reward = 1.0
+				else:
+					reward = 0.0
+				# reward = net_gain # FIXME: normalize this?
 
 		# Changed worldstate wrt. action
 		self.worth = worth
-		self.state = (position, eth_value)
+		self.state = (position, eth_value / 1000.0)
 
 		# Check endgame thresholds
 		done =  self.neg_worth > self.worth \
@@ -143,7 +144,7 @@ class CoinFlipEnv(gym.Env):
 		self.epoch = EPOCH_0
 		worth = self.init_start_worth()
 		position = self.init_start_pos()
-		self.state = [position, self.series.prices[0]]
+		self.state = [position, self.series.prices[0] / 1000.0]
 
 		return np.array(self.state)
 
@@ -215,7 +216,7 @@ class CoinFlipEnv(gym.Env):
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
 
-		position, price = self.state
+		position, _ = self.state
 		pixworth = int(self.worth / 10.0) # worth
 		self.statustrans.set_translation(0, pixworth)
 		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
