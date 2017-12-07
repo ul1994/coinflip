@@ -104,12 +104,10 @@ class CoinFlipEnv(gym.Env):
 			#  that doesn't contribute to the optimization
 			reward = 0.0
 		elif action == 1 and position == 0: # buy
-			# buy
-			# FIXME: what is a consistent reward for a buy?
+			position = 1
 			worth -= eth_value
-			self.buy_price = eth_value
-			position = 1 # +=
-			reward = 1.0
+			self.buy_price = eth_value # save last bought price
+			reward = 0.0 # no reward for just buying
 		elif action == 2 and position == 1: # sell
 				# sell
 				worth += eth_value
@@ -118,12 +116,13 @@ class CoinFlipEnv(gym.Env):
 				net_gain = eth_value - self.buy_price
 				reward = 1.0
 				if net_gain > 0:
-					reward = 1.0
+					reward = 1.0 # full reward for gain after sells
 				else:
-					reward = -1.0 # punish loss in sells
+					reward = -1.0 # full punishment of loss in sells
 				# reward = net_gain # FIXME: normalize this?
 		else:
-			reward = -0.5 # severely punish invalid moves
+			# reward = -0.5 # severely punish invalid moves
+			reward = 0.0 # no contribution from invalid moves
 
 		# Changed worldstate wrt. action
 		self.worth = worth
@@ -131,9 +130,9 @@ class CoinFlipEnv(gym.Env):
 
 		# Check endgame thresholds
 		done =  self.neg_worth > self.worth \
-				or self.start_worth > self.worth \
 				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
+				# or self.start_worth > self.worth \ # this may be too severe
 		done = bool(done)
 
 		return np.array(self.state), reward, done, {}
