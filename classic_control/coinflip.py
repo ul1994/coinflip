@@ -103,26 +103,30 @@ class CoinFlipEnv(gym.Env):
 			# Holding has 0 reward because it is a neutral action
 			#  that doesn't contribute to the optimization
 			reward = 0.0
+			self.last_action = action
 		elif action == 1 and position == 0: # buy
 			position = 1
 			worth -= eth_value
 			self.buy_price = eth_value # save last bought price
 			reward = 0.0 # no reward for just buying
+			self.last_action = action
 		elif action == 2 and position == 1: # sell
-				# sell
-				worth += eth_value
-				position = 0
-				# FIXME: define appropriate reward for selling
-				net_gain = eth_value - self.buy_price
-				reward = 1.0
-				if net_gain > 0:
-					reward = 1.0 # full reward for gain after sells
-				else:
-					reward = -1.0 # full punishment of loss in sells
-				# reward = net_gain # FIXME: normalize this?
+			# sell
+			worth += eth_value
+			position = 0
+			# FIXME: define appropriate reward for selling
+			net_gain = eth_value - self.buy_price
+			reward = 1.0
+			if net_gain > 0:
+				reward = 1.0 # full reward for gain after sells
+			else:
+				reward = -1.0 # full punishment of loss in sells
+			# reward = net_gain # FIXME: normalize this?
+			self.last_action = action
 		else:
 			# reward = -0.5 # severely punish invalid moves
 			reward = 0.0 # no contribution from invalid moves
+			self.last_action = None
 
 		# Changed worldstate wrt. action
 		self.worth = worth
@@ -185,7 +189,7 @@ class CoinFlipEnv(gym.Env):
 			# add a continuous ticker graph
 			self.tickers = []
 			for ii in range(screen_width / bar_w):
-				wt, ht = bar_w, 2
+				wt, ht = bar_w, 4
 				lhs = bar_w * ii
 				rhs = lhs + wt
 				ticker = rendering.FilledPolygon([(lhs,0), (lhs,ht), (rhs,ht), (rhs,0)])
@@ -209,7 +213,13 @@ class CoinFlipEnv(gym.Env):
 			pscale = self.series.prices[time_i] / float(maxprice)
 			pixheight = float(pscale * float(screen_height))
 			trans.set_translation(0, pixheight)
-			ticker.set_color(.8, .6, .3)
+			ticker.set_color(.8, .8, .8)
+
+		last_ticker, last_trans = self.tickers[ii]
+		if self.last_action == 1:
+			last_ticker.set_color(.3, .9, .3)
+		elif self.last_action == 2:
+			last_ticker.set_color(.9, .3, .3)
 
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
