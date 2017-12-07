@@ -42,10 +42,12 @@ class CoinFlipEnv(gym.Env):
 		series.era(Eras.Modern)
 		self.series = series
 
-	def start_worth(self):
-		return 800 + np.random.uniform(low=0, high=200)
+	def init_start_worth(self):
+		worth = 800 + np.random.uniform(low=0, high=200)
+		self.start_worth = worth
+		return worth
 
-	def start_pos(self):
+	def init_start_pos(self):
 		return int(np.random.random_sample() > 0.5)
 
 	def __init__(self):
@@ -54,8 +56,9 @@ class CoinFlipEnv(gym.Env):
 		self.load_data()
 		self.epoch = EPOCH_0
 
-		position = self.start_pos()# initialize with hold state (nothing)
-		worth = self.start_worth() # enough to purchase at least 1 eth
+		position = self.init_start_pos()# initialize with hold state (nothing)
+		worth = self.init_start_worth() # enough to purchase at least 1 eth
+		self.worth = worth
 
 		# Set some endgame parameters
 		self.cap_worth = worth * 50 # can accrue no more than this much
@@ -68,15 +71,16 @@ class CoinFlipEnv(gym.Env):
 		# Define obs space - range of possible worldstates
 		# 1. all possible positions: 0 eth ... 1 eth
 		# 2. all possible total worths: 500 ... 50 * 1000
-		high = np.array([1, self.cap_worth])
-		low = np.array([0, self.neg_worth])
+		# 3. possible range of price of ETH
+
+		high = np.array([1, 1000])
+		low = np.array([0, 0])
 		self.observation_space = spaces.Box(low, high)
 
 		self._seed()
+		self.reset()
 		self.viewer = None
 		self.state = None
-
-		self.steps_beyond_done = None
 
 	def _seed(self, seed=None):
 		self.np_random, seed = seeding.np_random(seed)
@@ -88,7 +92,8 @@ class CoinFlipEnv(gym.Env):
 		state = self.state
 
 		# Correctly unpack new worldstate
-		position, worth = state
+		position, past_price = state
+		worth = self.worth
 
 		# Correclty adjust world
 		eth_value = self.series.prices[self.epoch]
@@ -101,32 +106,33 @@ class CoinFlipEnv(gym.Env):
 			reward = 1.0
 		if action == 1:
 			reward = 1.0
-			if position == 0:
-			# 	# buy
-			# 	# FIXME: what is a consistent reward for a buy?
-				worth -= eth_value
-				self.buy_price = eth_value
-				position += 1
-				reward = 1.0
-			elif position == 1:
-			# 	# sell
-				worth += eth_value
-				position = 0
-				# FIXME: define appropriate reward for selling
-				net_gain = eth_value - self.buy_price
-				reward = 1.0
-				# if net_gain > 0:
-				# 	reward = 1.0
-				# else:
-				# 	reward = 1.0
-				# reward = net_gain # FIXME: normalize this?
+			# if position == 0:
+			# # 	# buy
+			# # 	# FIXME: what is a consistent reward for a buy?
+			# 	worth -= eth_value
+			# 	self.buy_price = eth_value
+			# 	position += 1
+			# 	reward = 1.0
+			# elif position == 1:
+			# # 	# sell
+			# 	worth += eth_value
+			# 	position = 0
+			# 	# FIXME: define appropriate reward for selling
+			# 	net_gain = eth_value - self.buy_price
+			# 	reward = 1.0
+			# 	# if net_gain > 0:
+			# 	# 	reward = 1.0
+			# 	# else:
+			# 	# 	reward = 1.0
+			# 	# reward = net_gain # FIXME: normalize this?
 
 		# Changed worldstate wrt. action
-		self.state = (position, worth)
+		self.worth = worth
+		self.state = (position, eth_value)
 
 		# Check endgame thresholds
-		done =  self.neg_worth > worth \
-				or worth > self.cap_worth \
+		done =  self.neg_worth > self.worth \
+				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
 
@@ -135,11 +141,10 @@ class CoinFlipEnv(gym.Env):
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
-		worth = self.start_worth()
-		position = self.start_pos()
-		self.state = [position, worth]
+		worth = self.init_start_worth()
+		position = self.init_start_pos()
+		self.state = [position, self.series.prices[0]]
 
-		self.steps_beyond_done = None
 		return np.array(self.state)
 
 	def _render(self, mode='human', close=False):
@@ -163,6 +168,13 @@ class CoinFlipEnv(gym.Env):
 			self.statustrans = rendering.Transform()
 			self.status.add_attr(self.statustrans)
 			self.viewer.add_geom(self.status)
+
+			# add initial worth line
+			self.baseline = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
+			self.baseline.set_color(.3,.8,.5)
+			self.baselinetrans = rendering.Transform()
+			self.baseline.add_attr(self.baselinetrans)
+			self.viewer.add_geom(self.baseline)
 
 			# add position status indicator
 			self.gui_position = rendering.FilledPolygon([(0,0), (0,20), (20,20), (20,0)])
@@ -203,9 +215,10 @@ class CoinFlipEnv(gym.Env):
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
 
-		position, worth = self.state
-		pixworth = int(worth / 10.0) # worth
+		position, price = self.state
+		pixworth = int(self.worth / 10.0) # worth
 		self.statustrans.set_translation(0, pixworth)
 		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
+		self.baselinetrans.set_translation(0, int(self.start_worth / 10.0))
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
