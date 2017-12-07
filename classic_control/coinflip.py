@@ -38,18 +38,19 @@ class CoinFlipEnv(gym.Env):
 		with open(livefile) as fl:
 			histdata += json.load(fl)
 
-		series = Series(histdata, sample=10)
-		series.era(Eras.Modern)
+		series = Series(histdata, sample=5)
+		series.era(Eras.Crash1)
 		self.series = series
 
 	def init_start_worth(self):
-		worth = 800 + np.random.uniform(low=0, high=200)
+		# worth = 800 + np.random.uniform(low=0, high=200)
+		worth = 900 + np.random.uniform(low=0, high=100)
 		self.start_worth = worth
 		return worth
 
 	def init_start_pos(self):
 		# return int(np.random.random_sample() > 0.5)
-		return 0
+		return 1
 
 	def __init__(self):
 		# Define general world parameters
@@ -66,7 +67,7 @@ class CoinFlipEnv(gym.Env):
 		self.neg_worth = worth / 2.0 # end the game if worth looks bad
 
 		# Define action space 3? {0 hold, 1 buy/sell}?
-		self.action_space = spaces.Discrete(2)
+		self.action_space = spaces.Discrete(3)
 		self.buy_price = 0.0 # historical buy price
 
 		# Define obs space - range of possible worldstates
@@ -98,23 +99,18 @@ class CoinFlipEnv(gym.Env):
 
 		# Correclty adjust world
 		eth_value = self.series.prices[self.epoch]
-		# worth -= 20
-		if action == 0:
-			# hold
-			# baseline worth does not change
-			# position # position does not change
-			# TODO: define appropriate reward for holding
+		if action == 0: # hold
+			# Holding has 0 reward because it is a neutral action
+			#  that doesn't contribute to the optimization
+			reward = 0.0
+		elif action == 1 and position == 0: # buy
+			# buy
+			# FIXME: what is a consistent reward for a buy?
+			worth -= eth_value
+			self.buy_price = eth_value
+			position = 1 # +=
 			reward = 1.0
-		if action == 1:
-			# reward = 1.0
-			if position == 0:
-				# buy
-				# FIXME: what is a consistent reward for a buy?
-				worth -= eth_value
-				self.buy_price = eth_value
-				position = 1 # +=
-				reward = 0.0
-			elif position == 1:
+		elif action == 2 and position == 1: # sell
 				# sell
 				worth += eth_value
 				position = 0
@@ -124,8 +120,10 @@ class CoinFlipEnv(gym.Env):
 				if net_gain > 0:
 					reward = 1.0
 				else:
-					reward = 0.0
+					reward = -1.0 # punish loss in sells
 				# reward = net_gain # FIXME: normalize this?
+		else:
+			reward = -0.5 # severely punish invalid moves
 
 		# Changed worldstate wrt. action
 		self.worth = worth
@@ -133,6 +131,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Check endgame thresholds
 		done =  self.neg_worth > self.worth \
+				or self.start_worth > self.worth \
 				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
