@@ -65,6 +65,7 @@ class CoinFlipEnv(gym.Env):
 		# Set some endgame parameters
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.neg_worth = worth / 2.0 # end the game if worth looks bad
+		self.cap_position = 1 # hold at most 10 ETH
 
 		# Define action space 3? {0 hold, 1 buy/sell}?
 		self.action_space = spaces.Discrete(3)
@@ -106,22 +107,24 @@ class CoinFlipEnv(gym.Env):
 			#  that doesn't contribute to the optimization
 			reward = 0.0
 			self.last_action = action
-		elif action == 1 and position == 0: # buy
-			position = 1
+		elif action == 1 and position < self.cap_position: # buy
+			position += 1
 			worth -= eth_value
 			self.buy_price = eth_value # save last bought price
 			reward = 0.0 # no reward for just buying
 			self.last_action = action
-		elif action == 2 and position == 1: # sell
+		elif action == 2 and position > 0: # sell
 			# sell
 			worth += eth_value
-			position = 0
-			# FIXME: define appropriate reward for selling
+			position -= 1
 			net_gain = eth_value - self.buy_price - self.exch_fee
+
+			# FIXME: define appropriate reward for selling
 			if net_gain > 0:
 				reward = 1.0 # full reward for gain after sells
 			else:
-				reward = -1.0 # full punishment of loss in sells
+				# reward = -1.0 # full punishment of loss in sells
+				reward = -0.5 # medium punishment
 			self.last_action = action
 		else:
 			# reward = -0.5 # severely punish invalid moves
@@ -132,11 +135,13 @@ class CoinFlipEnv(gym.Env):
 		self.worth = worth
 		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
 
-		# Check endgame thresholds
+		# Check endgame states
+		# 1. suffer from a major loss
+		# 2. hits upper bank limit
+		# 3. reaches end of allowed dataset
 		done =  self.neg_worth > self.worth \
 				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
-				# or self.start_worth > self.worth \ # this may be too severe
 		done = bool(done)
 
 		return np.array(self.state), reward, done, {}
@@ -190,6 +195,7 @@ class CoinFlipEnv(gym.Env):
 			# add a continuous ticker graph
 			self.tickers = []
 			for ii in range(screen_width / bar_w):
+			# for ii in range(3):
 				wt, ht = bar_w, 4
 				lhs = bar_w * ii
 				rhs = lhs + wt
@@ -203,7 +209,7 @@ class CoinFlipEnv(gym.Env):
 		if self.state is None: return None
 
 		for ii in range(min(self.epoch, len(self.tickers))):
-			time_i = self.epoch
+			time_i = self.epoch - 1 # render happens after first step
 			maxprice = 600.0
 			tind = time_i
 			if self.epoch >= len(self.tickers):
