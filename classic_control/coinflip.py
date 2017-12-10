@@ -93,7 +93,6 @@ class CoinFlipEnv(gym.Env):
 
 	def _step(self, action):
 		assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
-		self.epoch += 1 # incrememt world time
 		state = self.state
 
 		# Correctly unpack new worldstate
@@ -143,6 +142,7 @@ class CoinFlipEnv(gym.Env):
 				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
+		self.epoch += 1 # incrememt world time
 
 		return np.array(self.state), reward, done, {}
 
@@ -150,6 +150,7 @@ class CoinFlipEnv(gym.Env):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
 		worth = self.init_start_worth()
+		self.worth = worth
 		position = self.init_start_pos()
 		self.buy_price = self.series.prices[0] / 1000.0
 		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price]
@@ -179,11 +180,23 @@ class CoinFlipEnv(gym.Env):
 			self.viewer.add_geom(self.status)
 
 			# add initial worth line
-			self.baseline = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
-			self.baseline.set_color(.3,.8,.5)
-			self.baselinetrans = rendering.Transform()
-			self.baseline.add_attr(self.baselinetrans)
-			self.viewer.add_geom(self.baseline)
+			self.past_max_returns = -1
+			maxline = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
+			maxline.set_color(.3,.8,.5)
+			maxlinetrans = rendering.Transform()
+			maxline.add_attr(maxlinetrans)
+			maxlinetrans.set_translation(0, 0)
+			self.maxline_trans = maxlinetrans
+			self.viewer.add_geom(maxline)
+
+			# add price lines
+			for ii in range(1, 3):
+				pline = rendering.FilledPolygon([(0,0), (0,2), (screen_width - 1,2), (screen_width - 1,0)])
+				pline.set_color(.8,.8,.3)
+				plinetrans = rendering.Transform()
+				pline.add_attr(plinetrans)
+				plinetrans.set_translation(0, 100 * ii)
+				self.viewer.add_geom(pline)
 
 			# add position status indicator
 			self.gui_position = rendering.FilledPolygon([(0,0), (0,20), (20,20), (20,0)])
@@ -231,11 +244,14 @@ class CoinFlipEnv(gym.Env):
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
 
-		self.baselinetrans.set_translation(0, 50)
 
 		position, _, _ = self.state
-		pixworth = int((self.worth - self.start_worth) / 10.0) + 50# worth
+		pixworth = int((self.worth - self.start_worth) / 10.0)# worth
 		self.statustrans.set_translation(0, pixworth)
 		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
+
+		if self.worth > self.past_max_returns:
+			self.past_max_returns = self.worth
+			self.maxline_trans.set_translation(0, pixworth)
 
 		return self.viewer.render(return_rgb_array = mode=='rgb_array')
