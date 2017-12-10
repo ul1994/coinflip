@@ -5,8 +5,8 @@ permalink: https://perma.cc/C9ZM-652R
 """
 
 # ULZ
-
-ethdata_folder = '/Users/ulzee/nyu/eth/external/eth-history'
+import os
+ethdata_folder = os.environ['ETH_HISTORY']
 import sys, json
 sys.path.append(ethdata_folder)
 from eth import Series, Eras
@@ -39,7 +39,8 @@ class CoinFlipEnv(gym.Env):
 			histdata += json.load(fl)
 
 		series = Series(histdata, sample=5)
-		series.era(Eras.Crash1)
+		# series.era(Eras.Crash1)
+		series.era(Eras.Sine)
 		self.series = series
 
 	def init_start_worth(self):
@@ -110,20 +111,21 @@ class CoinFlipEnv(gym.Env):
 			position += 1
 			worth -= eth_value
 			self.buy_price = eth_value # save last bought price
-			reward = 0.0 # no reward for just buying
+			reward = 0.5 # no reward for just buying
 			self.last_action = action
 		elif action == 2 and position > 0: # sell
 			# sell
-			worth += eth_value
+			final_value = eth_value - self.exch_fee
+			worth += final_value
 			position -= 1
-			net_gain = eth_value - self.buy_price - self.exch_fee
+			net_gain = final_value - self.buy_price
 
 			# FIXME: define appropriate reward for selling
 			if net_gain > 0:
 				reward = 1.0 # full reward for gain after sells
 			else:
 				# reward = -1.0 # full punishment of loss in sells
-				reward = -0.5 # medium punishment
+				reward = 0.0 # medium punishment
 			self.last_action = action
 		else:
 			# reward = -0.5 # severely punish invalid moves
@@ -136,9 +138,11 @@ class CoinFlipEnv(gym.Env):
 
 		# Check endgame states
 		# 1. suffer from a major loss
+		# 1.5. in the red
 		# 2. hits upper bank limit
 		# 3. reaches end of allowed dataset
 		done =  self.neg_worth > self.worth \
+				or self.worth <= self.start_worth \
 				or self.worth > self.cap_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
