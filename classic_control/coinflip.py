@@ -89,38 +89,37 @@ class CoinFlipEnv(gym.Env):
 		worth = self.worth
 
 		# Correclty adjust world
+		if self.last_buy != None: self.last_buy += 1
 		eth_value = self.series.prices[self.epoch]
 		if action == 0: # hold
+			# TODO: Some reward if eth went up?
 			reward = 0.0
-
 			self.last_action = action
 		elif action == 1 and position < self.cap_position: # buy
 			position += 1
 			worth -= eth_value
 			self.buy_price = eth_value # save last bought price
-			reward = 0.0 # some incentive to buying
-
+			reward = 0.0 # no direct incentive, but critical to sell action
 			self.last_action = action
+			self.last_buy = 0 # start tracking last buy
 		elif action == 2 and position > 0: # sell
-			# print eth_value, self.buy_price
-			# raw_input(':')
 			final_value = eth_value - self.exch_fee
 			worth += final_value
 			position -= 1
 			net_gain = final_value - self.buy_price
 
 			if net_gain > 0:
-				reward = 1.0 # full reward for gain after sells
-				# reward = 1.0 + net_gain ** 2.0 # proportional reward for gain after sells
+				gain_reward = (net_gain / 100.0) ** 2.0
+				# reward = 1.0 + gain_reward # full reward for gain after sells
+				# plus addiitonal reward proportional to net gain
+				reward = gain_reward
 			else:
-				# reward = -1.0 # full punishment of loss in sells
 				reward = 0.0 # medium punishment
 
 			self.last_action = action
+			self.last_buy = None # stop tracking last buy
 		else:
-			# reward = -0.5 # severely punish invalid moves
 			reward = 0.0 # no contribution from invalid moves
-
 			self.last_action = None
 
 		# Changed worldstate wrt. action
@@ -128,10 +127,13 @@ class CoinFlipEnv(gym.Env):
 		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
 
 		# Check endgame states
-		# 1. falls below original investment after a sell
-		# 2. end of train data
+		# 1. A sell action causes you to go into red
+		# 2. A lot of steps since last buy and you are in red
+		# 3. end of train data
 		wassell = self.last_action == 2
+		sincebuy = self.last_buy > 20 # extended period of holding
 		done =  wassell and self.worth < self.start_worth \
+				or sincebuy and self.worth < self.start_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
 		# if done:
@@ -142,7 +144,7 @@ class CoinFlipEnv(gym.Env):
 			# raw_input(':')
 		self.epoch += 1 # incrememt world time
 
-		return np.array(self.state), reward, done, {}
+		return np.array(self.state), reward, done, { 'net': self.worth - self.start_worth}
 
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
@@ -155,6 +157,7 @@ class CoinFlipEnv(gym.Env):
 		self.buy_price = self.series.prices[0] # historical buy price
 		self.start_worth = worth
 		self.fail_loss = 300
+		self.last_buy = None
 		worth -= self.buy_price
 		self.exch_fee = 1.0 # exchange fee of at least $1
 		self.worth = worth
