@@ -46,7 +46,7 @@ class CoinFlipEnv(gym.Env):
 	def init_start_worth(self):
 		# worth = 800 + np.random.uniform(low=0, high=200)
 		worth = 900 + np.random.uniform(low=0, high=100)
-		self.start_worth = worth
+		# self.start_worth = worth
 		return worth
 
 	def init_start_pos(self):
@@ -57,22 +57,9 @@ class CoinFlipEnv(gym.Env):
 		# Define general world parameters
 		# TODO: define exchange fee
 		self.load_data()
-		self.epoch = EPOCH_0
-
-		position = self.init_start_pos()# initialize with hold state (nothing)
-		worth = self.init_start_worth() # enough to purchase at least 1 eth
-		self.worth = worth
-
-		# Set some endgame parameters
-		self.cap_worth = worth * 50 # can accrue no more than this much
-		self.neg_worth = worth / 2.0 # end the game if worth looks bad
-		self.cap_position = 1 # hold at most 10 ETH
 
 		# Define action space 3? {0 hold, 1 buy/sell}?
 		self.action_space = spaces.Discrete(3)
-		self.buy_price = self.series.prices[0] # historical buy price
-		self.start_worth -= self.buy_price
-		self.exch_fee = 1.0 # exchange fee of at least $1
 
 		# Define obs space - range of possible worldstates
 		# 1. all possible positions: 0 eth ... 1 eth
@@ -115,15 +102,15 @@ class CoinFlipEnv(gym.Env):
 
 			self.last_action = action
 		elif action == 2 and position > 0: # sell
-			print eth_value, self.buy_price
-			raw_input(':')
+			# print eth_value, self.buy_price
+			# raw_input(':')
 			final_value = eth_value - self.exch_fee
 			worth += final_value
 			position -= 1
 			net_gain = final_value - self.buy_price
 
 			if net_gain > 0:
-				reward = 1.0 + net_gain # full reward for gain after sells
+				reward = 1.0 # full reward for gain after sells
 				# reward = 1.0 + net_gain ** 2.0 # proportional reward for gain after sells
 			else:
 				# reward = -1.0 # full punishment of loss in sells
@@ -141,15 +128,18 @@ class CoinFlipEnv(gym.Env):
 		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
 
 		# Check endgame states
-		# 1. suffer from a major loss
-		# 1.5. in the red
-		# 2. hits upper bank limit
-		# 3. reaches end of allowed dataset
-		done =  self.neg_worth > self.worth \
-				or self.worth <= self.start_worth \
-				or self.worth > self.cap_worth \
+		# 1. falls below original investment after a sell
+		# 2. end of train data
+		wassell = self.last_action == 2
+		done =  wassell and self.worth < self.start_worth \
 				or self.epoch == len(self.series.prices)
 		done = bool(done)
+		# if done:
+			# print '| Action: %d' % (self.last_action)
+			# print '| Buy %.1f Sell %.1f' % (self.buy_price, eth_value)
+			# print '| Start %.1f, Final %.1f' % (self.start_worth, self.worth)
+			# print self.buy_price, eth_value, self.worth
+			# raw_input(':')
 		self.epoch += 1 # incrememt world time
 
 		return np.array(self.state), reward, done, {}
@@ -157,10 +147,25 @@ class CoinFlipEnv(gym.Env):
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
-		worth = self.init_start_worth()
+
+		position = self.init_start_pos() # initialize with hold state (nothing)
+		worth = self.init_start_worth() # enough to purchase at least 1 eth
+		self.cap_worth = worth * 50 # can accrue no more than this much
+		self.cap_position = 1 # hold at most 10 ETH
+		self.buy_price = self.series.prices[0] # historical buy price
+		self.start_worth = worth
+		self.fail_loss = 300
+		worth -= self.buy_price
+		self.exch_fee = 1.0 # exchange fee of at least $1
 		self.worth = worth
-		position = self.init_start_pos()
-		self.buy_price = self.series.prices[0]
+
+		# Set some endgame parameters
+		# self.neg_worth = worth / 2.0 # end the game if worth is halved
+		# self.epoch = EPOCH_0
+		# worth = self.init_start_worth()
+		# self.worth = worth
+		# position = self.init_start_pos()
+		# self.buy_price = self.series.prices[0]
 		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price / 1000.0]
 
 		return np.array(self.state)
