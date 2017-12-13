@@ -71,6 +71,7 @@ class CoinFlipEnv(gym.Env):
 		# Define action space 3? {0 hold, 1 buy/sell}?
 		self.action_space = spaces.Discrete(3)
 		self.buy_price = self.series.prices[0] # historical buy price
+		self.start_worth -= self.buy_price
 		self.exch_fee = 1.0 # exchange fee of at least $1
 
 		# Define obs space - range of possible worldstates
@@ -103,33 +104,36 @@ class CoinFlipEnv(gym.Env):
 		# Correclty adjust world
 		eth_value = self.series.prices[self.epoch]
 		if action == 0: # hold
-			# Holding has 0 reward because it is a neutral action
-			#  that doesn't contribute to the optimization
 			reward = 0.0
+
 			self.last_action = action
 		elif action == 1 and position < self.cap_position: # buy
 			position += 1
 			worth -= eth_value
 			self.buy_price = eth_value # save last bought price
-			reward = 0.5 # no reward for just buying
+			reward = 0.0 # some incentive to buying
+
 			self.last_action = action
 		elif action == 2 and position > 0: # sell
-			# sell
+			print eth_value, self.buy_price
+			raw_input(':')
 			final_value = eth_value - self.exch_fee
 			worth += final_value
 			position -= 1
 			net_gain = final_value - self.buy_price
 
-			# FIXME: define appropriate reward for selling
 			if net_gain > 0:
-				reward = 1.0 # full reward for gain after sells
+				reward = 1.0 + net_gain # full reward for gain after sells
+				# reward = 1.0 + net_gain ** 2.0 # proportional reward for gain after sells
 			else:
 				# reward = -1.0 # full punishment of loss in sells
 				reward = 0.0 # medium punishment
+
 			self.last_action = action
 		else:
 			# reward = -0.5 # severely punish invalid moves
 			reward = 0.0 # no contribution from invalid moves
+
 			self.last_action = None
 
 		# Changed worldstate wrt. action
@@ -156,8 +160,8 @@ class CoinFlipEnv(gym.Env):
 		worth = self.init_start_worth()
 		self.worth = worth
 		position = self.init_start_pos()
-		self.buy_price = self.series.prices[0] / 1000.0
-		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price]
+		self.buy_price = self.series.prices[0]
+		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price / 1000.0]
 
 		return np.array(self.state)
 
