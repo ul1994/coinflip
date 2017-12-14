@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 EPOCH_0 = 0
 WORTH_0 = 1000.0
 SEGMENT_TYPE = '015'
-GAIN_DAMPNER = 10.0
+GAIN_DAMPNER = 100.0
 f = 1.0
 EXCH_FEE = 0.0025
 LOSS_TOLERANCE = 1.0
@@ -66,7 +66,7 @@ class CoinFlipEnv(gym.Env):
 
 	def __init__(self):
 		self.segs = self.load_segments()
-		self.segs = self.load_series()
+		self.load_series()
 		# tlen, vlen = self.segs.get_size('060')
 		# self.train_len = tlen
 		# self.val_len = vlen
@@ -123,10 +123,12 @@ class CoinFlipEnv(gym.Env):
 			if net_gain > 0:
 				gain_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = 1.0 + gain_reward # full reward for gain after sells
-				# plus addiitonal reward proportional to net gain
+				# plus additional reward proportional to net gain
 				reward = gain_reward
 			else:
-				reward = 0.0 # medium punishment
+				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
+				# reward = -loss_reward # medium punishment
+				reward = 0
 
 			self.last_action = action
 			self.last_buy = None # stop tracking last buy
