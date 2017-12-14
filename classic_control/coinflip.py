@@ -9,7 +9,7 @@ import os
 ethdata_folder = os.environ['ETH_HISTORY']
 import sys, json
 sys.path.append(ethdata_folder)
-from eth import Series, Eras
+from eth import Segments
 import logging
 import math
 import gym
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 EPOCH_0 = 0
 WORTH_0 = 1000
+SEGMENT_TYPE = '060'
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -28,20 +29,10 @@ class CoinFlipEnv(gym.Env):
 		'video.frames_per_second' : 50
 	}
 
-	def load_data(self):
-		histfile = '%s/data/USDT_ETH-1800.json' % ethdata_folder
-		livefile = '%s/data/public.json' % ethdata_folder
-
-		with open(histfile) as fl:
-			histdata = json.load(fl)
-
-		with open(livefile) as fl:
-			histdata += json.load(fl)
-
-		series = Series(histdata, sample=5)
-		# series.era(Eras.Crash1)
-		series.era(Eras.Sine)
-		self.series = series
+	def load_segments():
+		datapath = '/home/ul1994/dev/eth-history/dump'
+		handle = Segments(datapath)
+		return handle
 
 	def init_start_worth(self):
 		# worth = 800 + np.random.uniform(low=0, high=200)
@@ -54,9 +45,10 @@ class CoinFlipEnv(gym.Env):
 		return 1
 
 	def __init__(self):
-		# Define general world parameters
-		# TODO: define exchange fee
-		self.load_data()
+		self.segs = self.load_segments()
+		# tlen, vlen = self.segs.get_size('060')
+		# self.train_len = tlen
+		# self.val_len = vlen
 
 		# Define action space 3? {0 hold, 1 buy/sell}?
 		self.action_space = spaces.Discrete(3)
@@ -66,7 +58,6 @@ class CoinFlipEnv(gym.Env):
 		# REMOVED 2. all possible total worths: 500 ... 50 * 1000
 		# 2. price of ETH / 1000 at this time (scaled from 0 ... 1)
 		# 3. last buy price
-
 		high = np.array([1, 1, 1])
 		low = np.array([0, 0, 0])
 		self.observation_space = spaces.Box(low, high)
@@ -90,7 +81,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Correclty adjust world
 		if self.last_buy != None: self.last_buy += 1
-		eth_value = self.series.prices[self.epoch]
+		eth_value = self.segment[self.epoch]
 		if action == 0: # hold
 			# TODO: Some reward if eth went up?
 			reward = 0.0
@@ -125,6 +116,7 @@ class CoinFlipEnv(gym.Env):
 		# Changed worldstate wrt. action
 		self.worth = worth
 		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
+		self.epoch += 1 # incrememt world time
 
 		# Check endgame states
 		# 1. A sell action causes you to go into red
@@ -134,27 +126,24 @@ class CoinFlipEnv(gym.Env):
 		sincebuy = self.last_buy > 20 # extended period of holding
 		done =  wassell and self.worth < self.start_worth \
 				or sincebuy and self.worth < self.start_worth \
-				or self.epoch == len(self.series.prices)
+				or self.epoch == len(self.segment)
 		done = bool(done)
-		# if done:
-			# print '| Action: %d' % (self.last_action)
-			# print '| Buy %.1f Sell %.1f' % (self.buy_price, eth_value)
-			# print '| Start %.1f, Final %.1f' % (self.start_worth, self.worth)
-			# print self.buy_price, eth_value, self.worth
-			# raw_input(':')
-		self.epoch += 1 # incrememt world time
 
 		return np.array(self.state), reward, done, { 'net': self.worth - self.start_worth}
 
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
+		self.segment = self.segs.get_train(SEGMENT_TYPE)
+		if self.segment == None:
+			self.segs.reset_order()
+			self.segment = self.segs.get_train(SEGMENT_TYPE)
 
 		position = self.init_start_pos() # initialize with hold state (nothing)
 		worth = self.init_start_worth() # enough to purchase at least 1 eth
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.cap_position = 1 # hold at most 10 ETH
-		self.buy_price = self.series.prices[0] # historical buy price
+		self.buy_price = self.segment[self.epoch] # historical buy price
 		self.start_worth = worth
 		self.fail_loss = 300
 		self.last_buy = None
@@ -163,13 +152,7 @@ class CoinFlipEnv(gym.Env):
 		self.worth = worth
 
 		# Set some endgame parameters
-		# self.neg_worth = worth / 2.0 # end the game if worth is halved
-		# self.epoch = EPOCH_0
-		# worth = self.init_start_worth()
-		# self.worth = worth
-		# position = self.init_start_pos()
-		# self.buy_price = self.series.prices[0]
-		self.state = [position, self.series.prices[0] / 1000.0, self.buy_price / 1000.0]
+		self.state = [position, self.segment[self.epoch] / 1000.0, self.buy_price / 1000.0]
 
 		return np.array(self.state)
 
@@ -246,7 +229,7 @@ class CoinFlipEnv(gym.Env):
 				time_i = self.epoch - len(self.tickers) + ii
 			ticker, trans = self.tickers[tind]
 
-			pscale = self.series.prices[time_i] / float(maxprice)
+			pscale = self.segment[time_i] / float(maxprice)
 			pixheight = float(pscale * float(screen_height))
 			trans.set_translation(0, pixheight)
 			ticker.set_color(.8, .8, .8)
