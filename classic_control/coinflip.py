@@ -103,6 +103,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Correclty adjust world
 		if self.last_buy != None: self.last_buy += 1
+		self.bad_deal = False
 		eth_value = self.segment[self.epoch]
 		if action == 0: # hold
 			# TODO: Some reward if eth went up?
@@ -130,6 +131,7 @@ class CoinFlipEnv(gym.Env):
 				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = -loss_reward # medium punishment
 				reward = 0
+				self.bad_deal = True
 
 			self.last_action = action
 			self.last_buy = None # stop tracking last buy
@@ -154,7 +156,8 @@ class CoinFlipEnv(gym.Env):
 		inRed = self.worth < LOSS_TOLERANCE * self.start_worth
 		done =  justSold and inRed \
 				or heldForLong and inRed \
-				or self.epoch == len(self.segment)
+				or self.epoch == len(self.segment) \
+				or self.bad_deal
 		done = bool(done)
 		info = {}
 		info['net'] = self.worth - self.start_worth
