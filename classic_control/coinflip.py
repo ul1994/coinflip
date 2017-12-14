@@ -20,8 +20,11 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 EPOCH_0 = 0
-WORTH_0 = 1000
-SEGMENT_TYPE = '060'
+WORTH_0 = 1000.0
+SEGMENT_TYPE = '015'
+GAIN_DAMPNER = 10.0
+f = 1.0
+EXCH_FEE = 1.0
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -29,7 +32,7 @@ class CoinFlipEnv(gym.Env):
 		'video.frames_per_second' : 50
 	}
 
-	def load_segments():
+	def load_segments(self):
 		datapath = '/home/ul1994/dev/eth-history/dump'
 		handle = Segments(datapath)
 		return handle
@@ -94,13 +97,13 @@ class CoinFlipEnv(gym.Env):
 			self.last_action = action
 			self.last_buy = 0 # start tracking last buy
 		elif action == 2 and position > 0: # sell
-			final_value = eth_value - self.exch_fee
+			final_value = eth_value - EXCH_FEE
 			worth += final_value
 			position -= 1
 			net_gain = final_value - self.buy_price
 
 			if net_gain > 0:
-				gain_reward = (net_gain / 100.0) ** 2.0
+				gain_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = 1.0 + gain_reward # full reward for gain after sells
 				# plus addiitonal reward proportional to net gain
 				reward = gain_reward
@@ -115,6 +118,8 @@ class CoinFlipEnv(gym.Env):
 
 		# Changed worldstate wrt. action
 		self.worth = worth
+		if self.worth > self.wmax: self.wmax = self.worth
+		if self.worth < self.wmin: self.wmin = self.worth
 		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
 		self.epoch += 1 # incrememt world time
 
@@ -128,16 +133,19 @@ class CoinFlipEnv(gym.Env):
 				or sincebuy and self.worth < self.start_worth \
 				or self.epoch == len(self.segment)
 		done = bool(done)
-
-		return np.array(self.state), reward, done, { 'net': self.worth - self.start_worth}
+		info = {}
+		info['net'] = self.worth - self.start_worth
+		info['min'] = self.wmin - self.start_worth
+		info['max'] = self.wmax - self.start_worth
+		return np.array(self.state), reward, done, info
 
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
-		self.segment = self.segs.get_train(SEGMENT_TYPE)
+		self.segment = self.segs.get_one(SEGMENT_TYPE)
 		if self.segment == None:
 			self.segs.reset_order()
-			self.segment = self.segs.get_train(SEGMENT_TYPE)
+			self.segment = self.segs.get_one(SEGMENT_TYPE)
 
 		position = self.init_start_pos() # initialize with hold state (nothing)
 		worth = self.init_start_worth() # enough to purchase at least 1 eth
@@ -148,8 +156,10 @@ class CoinFlipEnv(gym.Env):
 		self.fail_loss = 300
 		self.last_buy = None
 		worth -= self.buy_price
-		self.exch_fee = 1.0 # exchange fee of at least $1
 		self.worth = worth
+
+		self.wmin = 100000000000000
+		self.wmax = -100000000000000
 
 		# Set some endgame parameters
 		self.state = [position, self.segment[self.epoch] / 1000.0, self.buy_price / 1000.0]
