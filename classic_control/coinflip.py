@@ -9,7 +9,7 @@ import os
 ethdata_folder = os.environ['ETH_HISTORY']
 import sys, json
 sys.path.append(ethdata_folder)
-from eth import Segments
+from eth import Segments, Series, Eras
 import logging
 import math
 import gym
@@ -25,7 +25,8 @@ SEGMENT_TYPE = '015'
 GAIN_DAMPNER = 1.0
 f = 1.0
 EXCH_FEE = 0.0025
-LOSS_TOLERANCE = 0.9
+LOSS_TOLERANCE = 1.0
+DEBUG_MODE = True
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -37,6 +38,21 @@ class CoinFlipEnv(gym.Env):
 		datapath = '/home/ul1994/dev/eth-history/dump'
 		handle = Segments(datapath)
 		return handle
+
+	def load_series(self):
+		histfile = '%s/data/USDT_ETH-1800.json' % ethdata_folder
+		livefile = '%s/data/public.json' % ethdata_folder
+
+		with open(histfile) as fl:
+			histdata = json.load(fl)
+
+		with open(livefile) as fl:
+			histdata += json.load(fl)
+
+		series = Series(histdata, sample=5)
+		# series.era(Eras.Crash1)
+		series.era(Eras.Sine)
+		self.series = series
 
 	def init_start_worth(self):
 		# worth = 800 + np.random.uniform(low=0, high=200)
@@ -50,6 +66,7 @@ class CoinFlipEnv(gym.Env):
 
 	def __init__(self):
 		self.segs = self.load_segments()
+		self.segs = self.load_series()
 		# tlen, vlen = self.segs.get_size('060')
 		# self.train_len = tlen
 		# self.val_len = vlen
@@ -144,10 +161,13 @@ class CoinFlipEnv(gym.Env):
 	def _reset(self):
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
-		self.segment = self.segs.get_one(SEGMENT_TYPE)
-		if self.segment == None:
-			self.segs.reset_order()
+		if DEBUG_MODE:
+			self.segment = self.series.prices
+		else:
 			self.segment = self.segs.get_one(SEGMENT_TYPE)
+			if self.segment == None:
+				self.segs.reset_order()
+				self.segment = self.segs.get_one(SEGMENT_TYPE)
 
 		position = self.init_start_pos() # initialize with hold state (nothing)
 		worth = self.init_start_worth() # enough to purchase at least 1 eth
