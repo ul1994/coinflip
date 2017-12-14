@@ -230,17 +230,19 @@ class CoinFlipEnv(gym.Env):
 
 		if self.state is None: return None
 
+		maxprice = np.max(self.segment)
+		minprice = np.min(self.segment)
+		pricerange = maxprice - minprice
 		for ii in range(min(self.epoch, len(self.tickers))):
 			time_i = self.epoch - 1 # render happens after first step
-			maxprice = 600.0
 			tind = time_i
 			if self.epoch >= len(self.tickers):
 				tind = ii
 				time_i = self.epoch - len(self.tickers) + ii
 			ticker, trans = self.tickers[tind]
 
-			pscale = self.segment[time_i] / float(maxprice)
-			pixheight = float(pscale * float(screen_height))
+			pscale = (self.segment[time_i] - minprice) / float(pricerange)
+			pixheight = float(pscale * float(screen_height - 50.0))
 			trans.set_translation(0, pixheight)
 			ticker.set_color(.8, .8, .8)
 
