@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 EPOCH_0 = 0
 WORTH_0 = 1000.0
 SEGMENT_TYPE = '015'
-GAIN_DAMPNER = 1.0
+GAIN_DAMPNER = 10.0
 f = 1.0
 EXCH_FEE = 0.0025
 LOSS_TOLERANCE = 1.0
@@ -130,6 +130,7 @@ class CoinFlipEnv(gym.Env):
 
 			self.last_action = action
 			self.last_buy = None # stop tracking last buy
+			self.txn += 1
 		else:
 			reward = 0.0 # no contribution from invalid moves
 			self.last_action = None
@@ -138,7 +139,7 @@ class CoinFlipEnv(gym.Env):
 		self.worth = worth
 		if self.worth > self.wmax: self.wmax = self.worth
 		if self.worth < self.wmin: self.wmin = self.worth
-		self.state = (position, eth_value / 1000.0, self.buy_price / 1000.0)
+		self.state = (position, (eth_value - self.first_price), self.buy_price / 1000.0)
 		self.epoch += 1 # incrememt world time
 
 		# Check endgame states
@@ -156,6 +157,7 @@ class CoinFlipEnv(gym.Env):
 		info['net'] = self.worth - self.start_worth
 		info['min'] = self.wmin - self.start_worth
 		info['max'] = self.wmax - self.start_worth
+		info['txn'] = self.txn
 		return np.array(self.state), reward, done, info
 
 	def _reset(self):
@@ -174,17 +176,19 @@ class CoinFlipEnv(gym.Env):
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.cap_position = 1 # hold at most 10 ETH
 		self.buy_price = self.segment[self.epoch] # historical buy price
+		self.first_price = self.segment[self.epoch]
 		self.start_worth = worth
 		self.fail_loss = 300
 		self.last_buy = None
 		worth -= self.buy_price
 		self.worth = worth
+		self.txn = 0
 
 		self.wmin = 100000000000000
 		self.wmax = -100000000000000
 
 		# Set some endgame parameters
-		self.state = [position, self.segment[self.epoch] / 1000.0, self.buy_price / 1000.0]
+		self.state = [position, 0, self.buy_price / 1000.0]
 
 		return np.array(self.state)
 
