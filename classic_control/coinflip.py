@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 EPOCH_0 = 0
 WORTH_0 = 1000.0
 SEGMENT_TYPE = '015'
-GAIN_DAMPNER = 10.0
+GAIN_DAMPNER = 1.0
 f = 1.0
-EXCH_FEE = 1.0
+EXCH_FEE = 0.0025
+LOSS_TOLERANCE = 0.9
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -97,7 +98,7 @@ class CoinFlipEnv(gym.Env):
 			self.last_action = action
 			self.last_buy = 0 # start tracking last buy
 		elif action == 2 and position > 0: # sell
-			final_value = eth_value - EXCH_FEE
+			final_value = eth_value * (1.0 - EXCH_FEE)
 			worth += final_value
 			position -= 1
 			net_gain = final_value - self.buy_price
@@ -127,10 +128,11 @@ class CoinFlipEnv(gym.Env):
 		# 1. A sell action causes you to go into red
 		# 2. A lot of steps since last buy and you are in red
 		# 3. end of train data
-		wassell = self.last_action == 2
-		sincebuy = self.last_buy > 20 # extended period of holding
-		done =  wassell and self.worth < self.start_worth \
-				or sincebuy and self.worth < self.start_worth \
+		justSold = self.last_action == 2
+		heldForLong = self.last_buy > 20 # extended period of holding
+		inRed = self.worth < LOSS_TOLERANCE * self.start_worth
+		done =  justSold and inRed \
+				or heldForLong and inRed \
 				or self.epoch == len(self.segment)
 		done = bool(done)
 		info = {}
@@ -208,11 +210,11 @@ class CoinFlipEnv(gym.Env):
 				self.viewer.add_geom(pline)
 
 			# add position status indicator
-			self.gui_position = rendering.FilledPolygon([(0,0), (0,20), (20,20), (20,0)])
-			self.gui_position.set_color(.9,.0,.0)
-			self.positiontrans = rendering.Transform()
-			self.gui_position.add_attr(self.positiontrans)
-			self.viewer.add_geom(self.gui_position)
+			# self.gui_position = rendering.FilledPolygon([(0,0), (0,20), (20,20), (20,0)])
+			# self.gui_position.set_color(.9,.0,.0)
+			# self.positiontrans = rendering.Transform()
+			# self.gui_position.add_attr(self.positiontrans)
+			# self.viewer.add_geom(self.gui_position)
 
 			# add a continuous ticker graph
 			self.tickers = []
@@ -256,10 +258,10 @@ class CoinFlipEnv(gym.Env):
 			self.tickers[ii][0].set_color(.3, .3, .3)
 
 
-		position, _, _ = self.state
-		pixworth = int((self.worth - self.start_worth) / 10.0)# worth
+		# position, _, _ = self.state
+		pixworth = int((self.worth - self.start_worth) / 1.0)# worth
 		self.statustrans.set_translation(0, pixworth)
-		self.positiontrans.set_translation(0, 0 if position == 0 else 100)
+		# self.positiontrans.set_translation(0, 0 if position == 0 else 100)
 
 		if self.worth > self.past_max_returns:
 			self.past_max_returns = self.worth
