@@ -21,12 +21,13 @@ logger = logging.getLogger(__name__)
 
 EPOCH_0 = 0
 WORTH_0 = 1000.0
-SEGMENT_TYPE = '015'
+# SEGMENT_TYPE = '15'
+SEGMENT_TYPE = '60'
 f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
-LOSS_TOLERANCE = 1.0
+LOSS_TOLERANCE = 0.85
 DEBUG_MODE = False
 KEEP_SEG = False
 
@@ -37,7 +38,7 @@ class CoinFlipEnv(gym.Env):
 	}
 
 	def load_segments(self):
-		datapath = '/home/ul1994/dev/eth-history/dump'
+		datapath = ethdata_folder
 		handle = Segments(datapath)
 		return handle
 
@@ -68,7 +69,7 @@ class CoinFlipEnv(gym.Env):
 
 	def __init__(self):
 		self.segs = self.load_segments()
-		self.load_series()
+		# self.load_series()
 		# tlen, vlen = self.segs.get_size('060')
 		# self.train_len = tlen
 		# self.val_len = vlen
@@ -157,8 +158,8 @@ class CoinFlipEnv(gym.Env):
 		inRed = self.worth < LOSS_TOLERANCE * self.start_worth
 		done =  justSold and inRed \
 				or heldForLong and inRed \
-				or self.epoch == len(self.segment) \
-				or self.bad_deal
+				or self.epoch == len(self.segment)
+				# or self.bad_deal
 		done = bool(done)
 		info = {}
 		info['net'] = self.worth - self.start_worth
@@ -177,10 +178,11 @@ class CoinFlipEnv(gym.Env):
 		if DEBUG_MODE:
 			self.segment = self.series.prices
 		else:
-			self.segment = self.segs.get_one(SEGMENT_TYPE, keep=KEEP_SEG)
-			if self.segment == None:
-				self.segs.reset_order()
-				self.segment = self.segs.get_one(SEGMENT_TYPE)
+			self.segment = self.segs.train.p60
+			# self.segment = self.segs.get_one(SEGMENT_TYPE, keep=KEEP_SEG)
+			# if self.segment == None:
+			# 	self.segs.reset_order()
+			# 	self.segment = self.segs.get_one(SEGMENT_TYPE)
 
 		self.action_hist = []
 		position = self.init_start_pos() # initialize with hold state (nothing)
