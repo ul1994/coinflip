@@ -27,7 +27,8 @@ f = 1.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 LOSS_TOLERANCE = 1.0
-DEBUG_MODE = True
+DEBUG_MODE = False
+KEEP_SEG = False
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -176,7 +177,7 @@ class CoinFlipEnv(gym.Env):
 		if DEBUG_MODE:
 			self.segment = self.series.prices
 		else:
-			self.segment = self.segs.get_one(SEGMENT_TYPE)
+			self.segment = self.segs.get_one(SEGMENT_TYPE, keep=KEEP_SEG)
 			if self.segment == None:
 				self.segs.reset_order()
 				self.segment = self.segs.get_one(SEGMENT_TYPE)
