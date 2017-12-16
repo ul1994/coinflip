@@ -27,7 +27,8 @@ f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
-LOSS_TOLERANCE = 0.85
+# LOSS_TOLERANCE = 0.85
+LOSS_TOLERANCE = 0.9
 DEBUG_MODE = False
 KEEP_SEG = False
 
@@ -178,11 +179,7 @@ class CoinFlipEnv(gym.Env):
 		if DEBUG_MODE:
 			self.segment = self.series.prices
 		else:
-			self.segment = self.segs.train.p60
-			# self.segment = self.segs.get_one(SEGMENT_TYPE, keep=KEEP_SEG)
-			# if self.segment == None:
-			# 	self.segs.reset_order()
-			# 	self.segment = self.segs.get_one(SEGMENT_TYPE)
+			self.segment = self.segs.get_one(self.segs.train.p60, size=24 * 4) # 96
 
 		self.action_hist = []
 		position = self.init_start_pos() # initialize with hold state (nothing)
