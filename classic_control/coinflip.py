@@ -23,6 +23,7 @@ EPOCH_0 = 0
 WORTH_0 = 1000.0
 # SEGMENT_TYPE = '15'
 SEGMENT_TYPE = '60'
+SEGMENT_SIZE = 24 * 4
 f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
@@ -180,7 +181,8 @@ class CoinFlipEnv(gym.Env):
 		if DEBUG_MODE:
 			self.segment = self.series.prices
 		else:
-			self.segment = self.segs.get_one(self.segs.train.p60, size=24 * 4) # 96
+			use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
+			self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE) # 96
 
 		self.action_hist = []
 		position = self.init_start_pos() # initialize with hold state (nothing)
