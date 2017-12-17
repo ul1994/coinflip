@@ -28,7 +28,7 @@ f = 1.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.85
-LOSS_TOLERANCE = 0.95
+LOSS_TOLERANCE = 0.98
 ABS_LOSS_TOL = 25.0
 # LOSS_TOLERANCE = 1.0
 DEBUG_MODE = True
@@ -58,7 +58,7 @@ class CoinFlipEnv(gym.Env):
 
 	def init_start_worth(self):
 		# worth = 800 + np.random.uniform(low=0, high=200)
-		worth = 900 + np.random.uniform(low=0, high=100)
+		worth = 900  #+ np.random.uniform(low=0, high=100)
 		# self.start_worth = worth
 		return worth
 
@@ -155,7 +155,7 @@ class CoinFlipEnv(gym.Env):
 		# 3. end of train data
 		justSold = self.last_action == 2
 		heldForLong = self.last_buy > 20 # extended period of holding
-		inRed = self.worth < self.start_worth - ABS_LOSS_TOL
+		inRed = self.worth < self.start_worth * LOSS_TOLERANCE
 		done =  justSold and inRed \
 				or heldForLong and inRed \
 				or self.epoch == len(self.segment) \
