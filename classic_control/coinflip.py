@@ -22,16 +22,19 @@ logger = logging.getLogger(__name__)
 EPOCH_0 = 0
 # SEGMENT_TYPE = '15'
 SEGMENT_TYPE = '60'
+# SEGMENT_MODE = 'All'
+SEGMENT_MODE = 'Disc'
 SEGMENT_SIZE = 24 * 4
 f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.85
+# LOSS_TOLERANCE = 0.98
 LOSS_TOLERANCE = 0.98
 ABS_LOSS_TOL = 25.0
 # LOSS_TOLERANCE = 1.0
-DEBUG_MODE = True
+DEBUG_MODE = False
 KEEP_SEG = False
 
 class CoinFlipEnv(gym.Env):
@@ -53,7 +56,8 @@ class CoinFlipEnv(gym.Env):
 
 		series = Series(histdata, sample=5)
 		# series.era(Eras.Crash1)
-		series.era(Eras.Sine)
+		# series.era(Eras.Sine)
+		series.era(Eras.NoisySine)
 		self.series = series
 
 	def init_start_worth(self):
@@ -179,7 +183,9 @@ class CoinFlipEnv(gym.Env):
 			self.segment = self.series.prices
 		else:
 			use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
-			self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE) # 96
+			self.segment = use_seg
+			if SEGMENT_MODE == 'Disc':
+				self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE) # 96
 
 		self.action_hist = []
 		position = self.init_start_pos() # initialize with hold state (nothing)
