@@ -20,7 +20,6 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 EPOCH_0 = 0
-WORTH_0 = 1000.0
 # SEGMENT_TYPE = '15'
 SEGMENT_TYPE = '60'
 SEGMENT_SIZE = 24 * 4
@@ -29,7 +28,6 @@ f = 1.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.85
-# LOSS_TOLERANCE = 0.9
 LOSS_TOLERANCE = 0.95
 DEBUG_MODE = False
 KEEP_SEG = False
@@ -84,8 +82,8 @@ class CoinFlipEnv(gym.Env):
 		# 1. all possible positions: 0 eth ... 1 eth
 		# REMOVED 2. all possible total worths: 500 ... 50 * 1000
 		# 2. price of ETH / 1000 at this time (scaled from 0 ... 1)
-		# 3. last buy price
-		high = np.array([1, 1, 1])
+		# 3. ratio of (last buy price) / (current price)
+		high = np.array([1, 1, 10.0])
 		low = np.array([0, 0, 0])
 		self.observation_space = spaces.Box(low, high)
 
@@ -149,7 +147,7 @@ class CoinFlipEnv(gym.Env):
 		self.worth = worth
 		if self.worth > self.wmax: self.wmax = self.worth
 		if self.worth < self.wmin: self.wmin = self.worth
-		self.state = (position, eth_value - self.first_price, self.buy_price / 1000.0)
+		self.state = (position, eth_value, self.buy_price / eth_value)
 		self.epoch += 1 # incrememt world time
 
 		# Check endgame states
@@ -169,7 +167,7 @@ class CoinFlipEnv(gym.Env):
 		info['min'] = self.wmin - self.start_worth
 		info['max'] = self.wmax - self.start_worth
 		info['txn'] = self.txn
-		info['series'] = json.dumps((np.array(self.segment[:self.epoch]) - self.first_price).tolist())
+		info['series'] = json.dumps(self.segment[:self.epoch])
 		self.action_hist.append(self.last_action)
 		info['actions'] = json.dumps(self.action_hist)
 		info['epoch'] = self.epoch
@@ -190,7 +188,6 @@ class CoinFlipEnv(gym.Env):
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.cap_position = 1 # hold at most 10 ETH
 		self.buy_price = self.segment[self.epoch] # historical buy price
-		self.first_price = self.segment[self.epoch]
 		self.start_worth = worth
 		self.fail_loss = 300
 		self.last_buy = None
@@ -202,7 +199,10 @@ class CoinFlipEnv(gym.Env):
 		self.wmax = -100000000000000
 
 		# Set some endgame parameters
-		self.state = [position, 0, self.buy_price / 1000.0]
+		# starting ETH position
+		# first price
+		# starting buy-sell ratio (is 1)
+		self.state = [position, 0, 1.0]
 
 		return np.array(self.state)
 
