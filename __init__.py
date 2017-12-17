@@ -54,8 +54,9 @@ register(
 register(
     id='CoinFlip-v0',
     entry_point='gym.envs.classic_control:CoinFlipEnv',
-    max_episode_steps=2061,
-    # max_episode_steps=200,
+    # max_episode_steps=,
+    # max_episode_steps=2061,
+    max_episode_steps=200,
     reward_threshold=195.0,
 )
 

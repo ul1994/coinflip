@@ -31,8 +31,10 @@ GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.85
 # LOSS_TOLERANCE = 0.98
-LOSS_TOLERANCE = 0.98
-ABS_LOSS_TOL = 25.0
+# LOSS_TOLERANCE = 0.99
+LOSS_TOLERANCE = 1.0
+# ABS_LOSS_TOL = 25.0
+ABS_LOSS_TOL = 0.0
 # LOSS_TOLERANCE = 1.0
 DEBUG_MODE = False
 KEEP_SEG = False
@@ -127,14 +129,15 @@ class CoinFlipEnv(gym.Env):
 			position -= 1
 			net_gain = final_value - self.buy_price
 
+			gain_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 			if net_gain > 0:
-				gain_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = 1.0 + gain_reward # full reward for gain after sells
 				# plus additional reward proportional to net gain
 				reward = gain_reward
 			else:
 				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = -loss_reward # medium punishment
+				# reward = -gain_reward
 				reward = 0
 				if net_gain < -ABS_LOSS_TOL:
 					self.bad_deal = True
@@ -148,6 +151,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Changed worldstate wrt. action
 		self.worth = worth
+		self.worth_hist.append(self.worth)
 		if self.worth > self.wmax: self.wmax = self.worth
 		if self.worth < self.wmin: self.wmin = self.worth
 		self.state = (position, eth_value / 1000.0, self.buy_price / eth_value)
@@ -185,14 +189,16 @@ class CoinFlipEnv(gym.Env):
 			use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
 			self.segment = use_seg
 			if SEGMENT_MODE == 'Disc':
-				self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE) # 96
+				self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE, repeat=100) # 96
 
 		self.action_hist = []
+		self.worth_hist = []
 		position = self.init_start_pos() # initialize with hold state (nothing)
 		worth = self.init_start_worth() # enough to purchase at least 1 eth
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.cap_position = 1 # hold at most 10 ETH
 		self.buy_price = self.segment[self.epoch] # historical buy price
+		worth -= self.buy_price
 		self.start_worth = worth
 		self.fail_loss = 300
 		self.last_buy = None
