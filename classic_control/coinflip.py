@@ -29,7 +29,9 @@ GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.85
 LOSS_TOLERANCE = 0.95
-DEBUG_MODE = False
+ABS_LOSS_TOL = 25.0
+# LOSS_TOLERANCE = 1.0
+DEBUG_MODE = True
 KEEP_SEG = False
 
 class CoinFlipEnv(gym.Env):
@@ -44,14 +46,10 @@ class CoinFlipEnv(gym.Env):
 		return handle
 
 	def load_series(self):
-		histfile = '%s/data/USDT_ETH-1800.json' % ethdata_folder
-		livefile = '%s/data/public.json' % ethdata_folder
+		histfile = '%s/data/hist.json' % ethdata_folder
 
 		with open(histfile) as fl:
 			histdata = json.load(fl)
-
-		with open(livefile) as fl:
-			histdata += json.load(fl)
 
 		series = Series(histdata, sample=5)
 		# series.era(Eras.Crash1)
@@ -70,7 +68,7 @@ class CoinFlipEnv(gym.Env):
 
 	def __init__(self):
 		self.segs = self.load_segments()
-		# self.load_series()
+		self.load_series()
 		# tlen, vlen = self.segs.get_size('060')
 		# self.train_len = tlen
 		# self.val_len = vlen
@@ -134,7 +132,8 @@ class CoinFlipEnv(gym.Env):
 				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				# reward = -loss_reward # medium punishment
 				reward = 0
-				self.bad_deal = True
+				if net_gain < -ABS_LOSS_TOL:
+					self.bad_deal = True
 
 			self.last_action = action
 			self.last_buy = None # stop tracking last buy
@@ -147,7 +146,7 @@ class CoinFlipEnv(gym.Env):
 		self.worth = worth
 		if self.worth > self.wmax: self.wmax = self.worth
 		if self.worth < self.wmin: self.wmin = self.worth
-		self.state = (position, eth_value, self.buy_price / eth_value)
+		self.state = (position, eth_value / 1000.0, self.buy_price / eth_value)
 		self.epoch += 1 # incrememt world time
 
 		# Check endgame states
@@ -156,11 +155,11 @@ class CoinFlipEnv(gym.Env):
 		# 3. end of train data
 		justSold = self.last_action == 2
 		heldForLong = self.last_buy > 20 # extended period of holding
-		inRed = self.worth < LOSS_TOLERANCE * self.start_worth
+		inRed = self.worth < self.start_worth - ABS_LOSS_TOL
 		done =  justSold and inRed \
 				or heldForLong and inRed \
-				or self.epoch == len(self.segment)
-				# or self.bad_deal
+				or self.epoch == len(self.segment) \
+				or self.bad_deal
 		done = bool(done)
 		info = {}
 		info['net'] = self.worth - self.start_worth
@@ -294,7 +293,6 @@ class CoinFlipEnv(gym.Env):
 
 		for ii in range(min(self.epoch, len(self.tickers)) + 1, len(self.tickers)):
 			self.tickers[ii][0].set_color(.3, .3, .3)
-
 
 		# position, _, _ = self.state
 		pixworth = int((self.worth - self.start_worth) / 1.0)# worth
