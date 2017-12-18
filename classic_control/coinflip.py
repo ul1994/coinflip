@@ -16,6 +16,7 @@ import gym
 from gym import spaces
 from gym.utils import seeding
 import numpy as np
+from rl.core import TRAINING_MODE
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,13 @@ f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
-# LOSS_TOLERANCE = 0.85
+LOSS_TOLERANCE = 0.95
 # LOSS_TOLERANCE = 0.98
 # LOSS_TOLERANCE = 0.99
-LOSS_TOLERANCE = 1.0
+# LOSS_TOLERANCE = 1.0
 # ABS_LOSS_TOL = 25.0
-ABS_LOSS_TOL = 0.0
+# ABS_LOSS_TOL = 0.0
+ABS_LOSS_TOL = 30.0
 # LOSS_TOLERANCE = 1.0
 DEBUG_MODE = False
 KEEP_SEG = False
@@ -151,7 +153,7 @@ class CoinFlipEnv(gym.Env):
 
 		# Changed worldstate wrt. action
 		self.worth = worth
-		self.worth_hist.append(self.worth)
+		self.worth_hist.append(self.worth - self.start_worth)
 		if self.worth > self.wmax: self.wmax = self.worth
 		if self.worth < self.wmin: self.wmin = self.worth
 		self.state = (position, eth_value / 1000.0, self.buy_price / eth_value)
@@ -164,6 +166,7 @@ class CoinFlipEnv(gym.Env):
 		justSold = self.last_action == 2
 		heldForLong = self.last_buy > 20 # extended period of holding
 		inRed = self.worth < self.start_worth * LOSS_TOLERANCE
+		# print justSold and inRed, self.bad_deal,heldForLong and inRed, self.epoch == len(self.segment)
 		done =  justSold and inRed \
 				or heldForLong and inRed \
 				or self.epoch == len(self.segment) \
@@ -175,21 +178,32 @@ class CoinFlipEnv(gym.Env):
 		info['max'] = self.wmax - self.start_worth
 		info['txn'] = self.txn
 		info['series'] = json.dumps(self.segment[:self.epoch])
+		info['worth'] = json.dumps(self.worth_hist)
 		self.action_hist.append(self.last_action)
 		info['actions'] = json.dumps(self.action_hist)
 		info['epoch'] = self.epoch
 		return np.array(self.state), reward, done, info
 
 	def _reset(self):
+		with open(TRAINING_MODE) as fl:
+			mode = fl.readline().strip()
 		# FIXME: Correctly reinitialize a random start state
 		self.epoch = EPOCH_0
 		if DEBUG_MODE:
-			self.segment = self.series.prices
+			if mode == 'val':
+				self.series.era(Eras.Sine)
+				self.segment = self.series.prices
+			elif mode == 'train':
+				self.segment = self.series.prices
+				self.series.era(Eras.NoisySine)
+			else:
+				raise Exception('Unknown TRAINING_MODE!')
 		else:
-			use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
-			self.segment = use_seg
-			if SEGMENT_MODE == 'Disc':
-				self.segment = self.segs.get_one(use_seg, size=SEGMENT_SIZE, repeat=100) # 96
+			use_seg = self.segs.train.p60
+			# use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
+			# self.segment = use_seg
+			# if SEGMENT_MODE == 'Disc':
+			self.segment = self.segs.get_long(use_seg, size=400, repeat=500) # 96
 
 		self.action_hist = []
 		self.worth_hist = []
