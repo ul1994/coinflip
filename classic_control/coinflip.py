@@ -149,7 +149,7 @@ class CoinFlipEnv(gym.Env):
 			else:
 				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
 				reward = -gain_reward
-				reward = 0
+				# reward = 0
 				if gain < -ABS_LOSS_TOL:
 					self.bad_deal = True
 
@@ -216,7 +216,8 @@ class CoinFlipEnv(gym.Env):
 				self.segment = self.segs.val.p60
 
 				# self.segment = self.segs.get_long(use_seg, size=200, repeat=1) # 96
-			# elif mode == 'train_test':
+			elif mode == 'train_test':
+				self.segment = self.segs.train.p60
 			# 	self.segs.long_orders = []
 			# 	self.segs.repeat = 0
 			# 	self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=1) # 96
