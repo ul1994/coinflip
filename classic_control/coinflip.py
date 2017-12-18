@@ -27,8 +27,8 @@ SEGMENT_TYPE = '60'
 SEGMENT_MODE = 'Disc'
 SEGMENT_SIZE = 24 * 16
 f = 1.0
-# GAIN_DAMPNER = 100.0
-GAIN_DAMPNER = 10.0
+GAIN_DAMPNER = 100.0
+# GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
 # LOSS_TOLERANCE = 0.95
 LOSS_TOLERANCE = 0.98
@@ -148,9 +148,8 @@ class CoinFlipEnv(gym.Env):
 				reward = gain_reward
 			else:
 				# loss_reward = (net_gain / GAIN_DAMPNER) ** 2.0
-				# reward = -loss_reward # medium punishment
 				reward = -gain_reward
-				# reward = 0
+				reward = 0
 				if gain < -ABS_LOSS_TOL:
 					self.bad_deal = True
 
@@ -211,17 +210,19 @@ class CoinFlipEnv(gym.Env):
 			else:
 				raise Exception('Unknown TRAINING_MODE!')
 		else:
-			use_seg = self.segs.train.p60
 			# use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
 			# self.segment = use_seg
 			# if SEGMENT_MODE == 'Disc':
 			if mode == 'val':
 				self.segment = self.segs.val.p60
-				# self.segs.long_orders = []
-				# self.segs.repeat = 0
+
 				# self.segment = self.segs.get_long(use_seg, size=200, repeat=1) # 96
+			# elif mode == 'train_test':
+			# 	self.segs.long_orders = []
+			# 	self.segs.repeat = 0
+			# 	self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=1) # 96
 			else:
-				self.segment = self.segs.get_long(use_seg, size=200, repeat=50) # 96
+				self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=50) # 96
 
 		self.action_hist = []
 		self.worth_hist = []
