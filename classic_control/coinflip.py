@@ -38,7 +38,7 @@ LOSS_TOLERANCE = 0.95
 # ABS_LOSS_TOL = 0.0
 ABS_LOSS_TOL = 30.0
 # LOSS_TOLERANCE = 1.0
-DEBUG_MODE = False
+DEBUG_MODE = True
 KEEP_SEG = False
 
 class CoinFlipEnv(gym.Env):
@@ -126,13 +126,18 @@ class CoinFlipEnv(gym.Env):
 			self.last_action = action
 			self.last_buy = 0 # start tracking last buy
 		elif action == 2 and position > 0: # sell
+			# print worth, self.max_worth, eth_value
 			final_value = eth_value * (1.0 - EXCH_FEE)
 			worth += final_value
 			position -= 1
-			net_gain = final_value - self.buy_price
 
-			gain_reward = (net_gain / GAIN_DAMPNER) ** 2.0
-			if net_gain > 0:
+			max_gain = worth - self.max_worth
+			if self.max_worth < worth:
+				self.max_worth = worth
+			# net_gain = final_value - self.buy_price
+
+			gain_reward = (max_gain / GAIN_DAMPNER) ** 2.0
+			if max_gain > 0:
 				# reward = 1.0 + gain_reward # full reward for gain after sells
 				# plus additional reward proportional to net gain
 				reward = gain_reward
@@ -141,7 +146,7 @@ class CoinFlipEnv(gym.Env):
 				# reward = -loss_reward # medium punishment
 				# reward = -gain_reward
 				reward = 0
-				if net_gain < -ABS_LOSS_TOL:
+				if max_gain < -ABS_LOSS_TOL:
 					self.bad_deal = True
 
 			self.last_action = action
@@ -212,11 +217,11 @@ class CoinFlipEnv(gym.Env):
 		self.cap_worth = worth * 50 # can accrue no more than this much
 		self.cap_position = 1 # hold at most 10 ETH
 		self.buy_price = self.segment[self.epoch] # historical buy price
-		worth -= self.buy_price
+		self.max_worth = worth # before buy price
 		self.start_worth = worth
+		worth -= self.buy_price
 		self.fail_loss = 300
 		self.last_buy = None
-		worth -= self.buy_price
 		self.worth = worth
 		self.txn = 0
 
