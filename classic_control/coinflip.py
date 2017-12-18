@@ -30,16 +30,18 @@ f = 1.0
 # GAIN_DAMPNER = 100.0
 GAIN_DAMPNER = 10.0
 EXCH_FEE = 0.0025
-LOSS_TOLERANCE = 0.95
-# LOSS_TOLERANCE = 0.98
+# LOSS_TOLERANCE = 0.95
+LOSS_TOLERANCE = 0.98
 # LOSS_TOLERANCE = 0.99
 # LOSS_TOLERANCE = 1.0
 # ABS_LOSS_TOL = 25.0
 # ABS_LOSS_TOL = 0.0
 ABS_LOSS_TOL = 30.0
 # LOSS_TOLERANCE = 1.0
-DEBUG_MODE = True
+DEBUG_MODE = False
 KEEP_SEG = False
+REWARD_MODE = 'max'
+# REWARD_MODE = 'sell'
 
 class CoinFlipEnv(gym.Env):
 	metadata = {
@@ -131,13 +133,16 @@ class CoinFlipEnv(gym.Env):
 			worth += final_value
 			position -= 1
 
-			max_gain = worth - self.max_worth
-			if self.max_worth < worth:
-				self.max_worth = worth
-			# net_gain = final_value - self.buy_price
+			if REWARD_MODE == 'max':
+				gain = worth - self.max_worth
+				if self.max_worth < worth:
+					self.max_worth = worth
+				gain_reward = (gain / GAIN_DAMPNER) ** 2.0
+			elif REWARD_MODE == 'sell':
+				gain = final_value - self.buy_price
+				gain_reward = (gain / GAIN_DAMPNER) ** 2.0
 
-			gain_reward = (max_gain / GAIN_DAMPNER) ** 2.0
-			if max_gain > 0:
+			if gain > 0:
 				# reward = 1.0 + gain_reward # full reward for gain after sells
 				# plus additional reward proportional to net gain
 				reward = gain_reward
@@ -146,7 +151,7 @@ class CoinFlipEnv(gym.Env):
 				# reward = -loss_reward # medium punishment
 				# reward = -gain_reward
 				reward = 0
-				if max_gain < -ABS_LOSS_TOL:
+				if gain < -ABS_LOSS_TOL:
 					self.bad_deal = True
 
 			self.last_action = action
@@ -170,7 +175,9 @@ class CoinFlipEnv(gym.Env):
 		# 3. end of train data
 		justSold = self.last_action == 2
 		heldForLong = self.last_buy > 20 # extended period of holding
-		inRed = self.worth < self.start_worth * LOSS_TOLERANCE
+		# inRed = self.worth < self.start_worth * LOSS_TOLERANCE
+		# inRed = self.worth < self.max_worth * LOSS_TOLERANCE
+		inRed = self.worth < self.max_worth - ABS_LOSS_TOL
 		# print justSold and inRed, self.bad_deal,heldForLong and inRed, self.epoch == len(self.segment)
 		done =  justSold and inRed \
 				or heldForLong and inRed \
@@ -208,7 +215,7 @@ class CoinFlipEnv(gym.Env):
 			# use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
 			# self.segment = use_seg
 			# if SEGMENT_MODE == 'Disc':
-			self.segment = self.segs.get_long(use_seg, size=400, repeat=500) # 96
+			self.segment = self.segs.get_long(use_seg, size=200, repeat=50) # 96
 
 		self.action_hist = []
 		self.worth_hist = []
