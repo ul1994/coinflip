@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 EPOCH_0 = 0
 # SEGMENT_TYPE = '15'
 SEGMENT_TYPE = '60'
-# SEGMENT_MODE = 'All'
-SEGMENT_MODE = 'Disc'
+SEGMENT_MODE = 'Full'
+# SEGMENT_MODE = 'Disc'
 SEGMENT_SIZE = 24 * 16
 f = 1.0
 GAIN_DAMPNER = 100.0
@@ -212,7 +212,6 @@ class CoinFlipEnv(gym.Env):
 		else:
 			# use_seg = self.segs.train.p60 if SEGMENT_TYPE == '60' else self.segs.train.p15
 			# self.segment = use_seg
-			# if SEGMENT_MODE == 'Disc':
 			if mode == 'val':
 				self.segment = self.segs.val.p60
 
@@ -222,7 +221,10 @@ class CoinFlipEnv(gym.Env):
 			# 	self.segs.repeat = 0
 			# 	self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=1) # 96
 			else:
-				self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=50) # 96
+				if SEGMENT_MODE == 'Disc':
+					self.segment = self.segs.get_long(self.segs.train.p60, size=200, repeat=50) # 96
+				elif SEGMENT_MODE == 'Full':
+					self.segment = self.segs.train.p60
 
 		self.action_hist = []
 		self.worth_hist = []
